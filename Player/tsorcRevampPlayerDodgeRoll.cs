@@ -85,6 +85,7 @@ namespace tsorcRevamp
         public PlayerFrames? forcedLegFrame;
         public int forcedDirection;
         public int itemBlockingTime;
+        public float beforeRollSpeed;
 
 
         public override void HideDrawLayers(PlayerDrawSet drawInfo)
@@ -328,6 +329,7 @@ namespace tsorcRevamp
             dodgeDirectionVisual = (sbyte)Player.direction;
             dodgeDirection = wantedDodgerollDir != 0 ? wantedDodgerollDir : (sbyte)Player.direction;
             dodgeCooldown = DodgeDefaultCooldown;
+            beforeRollSpeed = Math.Abs(Player.velocity.X);
 
             if (!Player.GetModPlayer<tsorcRevampPlayer>().CanUseItemsWhileDodging)
             {
@@ -354,22 +356,21 @@ namespace tsorcRevamp
         }
         private void UpdateDodging()
         {
-
             wantsDodgerollTimer = StepTowards(wantsDodgerollTimer, 0f, (float)1 / 60);
-
+        
             noDodge |= Player.mount.Active;
-
+        
             if (noDodge)
             {
                 isDodging = false;
                 noDodge = false;
-
+        
                 return;
             }
-
+        
             bool onGround = OnGround(Player);
             ref float rotation = ref Player.GetModPlayer<tsorcRevampPlayer>().rotation;
-
+        
             //Attempt to initiate a dodgeroll if the player isn't doing one already.
             if (!isDodging && !TryStartDodgeroll())
             {
@@ -391,161 +392,127 @@ namespace tsorcRevamp
                     break;
                 }
             }*/
-
+        
             //Apply velocity
             if (dodgeTime < DodgeTimeMax * 0.5f)
             {
                 float dodgeSpeed = 8f;
-
-                if (onGround)
-                    dodgeSpeed = 12f;
-
-                if (Player.GetModPlayer<tsorcRevampPlayer>().HollowSoldierAgility)
-                {
-                    dodgeSpeed = 10f;
-
-                    if (onGround)
-                        dodgeSpeed = 15f;
-                }
-
-                if (Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
-                {
-                    dodgeSpeed = 7f;
-
-                    if (onGround)
-                        dodgeSpeed = 10f;
-                }
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1)
-                {
-                    dodgeSpeed = 11f;
-
-                    if (onGround)
-                        dodgeSpeed = 13f;
-                }
-
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2)
-                {
-                    dodgeSpeed = 14f;
-
-                    if (onGround)
-                        dodgeSpeed = 14f;
-                }
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
-                {
-                    dodgeSpeed = 8f;
-
-                    if (onGround)
-                        dodgeSpeed = 12f;
-                }
+        
+                // Faster roll speed if on the ground
+                float speedMultiplier = onGround ? 1.4f : 1.1f;
+        
+                // Increase the base roll speed if the player is moving faster than the default
+                if (beforeRollSpeed > dodgeSpeed)
+                    dodgeSpeed = beforeRollSpeed;
+        
                 if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
                 {
-                    dodgeSpeed = 11f;
-
-                    if (onGround)
-                        dodgeSpeed = 13f;
+                    dodgeSpeed += 3f;
                 }
-
+                else if (!(Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis))
+                {
+                    if (Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
+                        dodgeSpeed -= 1f;
+        
+                    if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2)
+                    {
+                        dodgeSpeed += 6f;
+                    }
+                    else if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1)
+                    {
+                        dodgeSpeed += 3f;
+                    }
+                }
+        
+                if (Player.GetModPlayer<tsorcRevampPlayer>().HollowSoldierAgility)
+                    dodgeSpeed += 2f;
+        
                 if (Player.GetModPlayer<tsorcRevampPlayer>().BurdenOfSmough)
-                {
-                    dodgeSpeed = 5.5f;
-
-                    if (onGround)
-                        dodgeSpeed = 8f;
-                }
-
-
-
-
+                    dodgeSpeed -= 2.5f;
+        
+                dodgeSpeed *= speedMultiplier;
+        
                 dodgeSpeed *= dodgeDirection;
-
-                if (Math.Abs(Player.velocity.X) < Math.Abs(dodgeSpeed) || Math.Sign(dodgeSpeed) != Math.Sign(Player.velocity.X))
-                {
-                    Player.velocity.X = dodgeSpeed;
-                }
-
+                Player.velocity.X = dodgeSpeed;
             }
-
+        
             Player.pulley = false;
-
+        
             //Apply rotations & direction
             forcedItemRotation = dodgeItemRotation;
             forcedLegFrame = PlayerFrames.Jump;
             forcedDirection = dodgeDirectionVisual;
-
+        
             rotation = dodgeDirection == 1
                 ? Math.Min(MathHelper.Pi * 2f, MathHelper.Lerp(dodgeStartRot, MathHelper.TwoPi, dodgeTime / (DodgeTimeMax * 1f)))
                 : Math.Max(-MathHelper.Pi * 2f, MathHelper.Lerp(dodgeStartRot, -MathHelper.TwoPi, dodgeTime / (DodgeTimeMax * 1f)));
             //Progress the dodgeroll
             dodgeTime += 1f / 60f;
             Player.immune = true;
-
+        
             if (dodgeTime >= DodgeTimeMax * 0.6f)
             {
-                float decelerationRate = 0.85f;
-                if (Player.GetModPlayer<tsorcRevampPlayer>().HollowSoldierAgility)
-                {
-                    decelerationRate = 0.85f;
-                    DodgeImmuneTime = 20;
-                    dodgeCooldown = 12;
-                    if (onGround)
-                    {
-                        decelerationRate = 0.9f;
-                        DodgeImmuneTime = 23;
-                        dodgeCooldown = 8;
-                    }
-                    DodgeImmuneTime = 21;
-                    dodgeCooldown = 10;
-                }
-
-                if (Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
-                {
-                    decelerationRate = 0.72f;
-                    DodgeImmuneTime = 16;
-                    dodgeCooldown = 35;
-                }
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1)
-                {
-                    decelerationRate = 0.88f;
-                    DodgeImmuneTime = 21;
-                    dodgeCooldown = 10;
-                }
-
-                //chloranthy ring II effect
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2)
-                {
-                    decelerationRate = 0.91f;
-                    DodgeImmuneTime = 24;
-                    dodgeCooldown = 0;
-                }
-
-                if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
-                {
-                    decelerationRate = 0.85f;
-                    DodgeImmuneTime = 18;
-                    dodgeCooldown = 30;
-                }
-
+                float decelerationRate = 0.9f;
+        
+                // Define custom roll parameters when acessories conflict.
                 if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
                 {
-                    decelerationRate = 0.88f;
-                    DodgeImmuneTime = 21;
+                    decelerationRate += 0.03f;
+                    DodgeImmuneTime += 2;
                     dodgeCooldown = 10;
                 }
-
+                // ChloranthyRing1 cancels out completely with the IceboundMythrilAegis
+                else if (!(Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1 && Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis))
+                {
+                    // To make sure player does not benefit from stacking ring 1 and 2
+                    if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing2) 
+                    {
+                        decelerationRate += 0.06f;
+                        DodgeImmuneTime += 6;
+                        dodgeCooldown = 0;
+                    }
+                    else if (Player.GetModPlayer<tsorcRevampPlayer>().ChloranthyRing1)
+                    {
+                        decelerationRate += 0.05f;
+                        DodgeImmuneTime += 3;
+                        dodgeCooldown = 10;
+                    }
+        
+                    if (Player.GetModPlayer<tsorcRevampPlayer>().IceboundMythrilAegis)
+                    {
+                        decelerationRate -= 0.13f;
+                        DodgeImmuneTime -= 2;
+                        dodgeCooldown = 35;
+                    }
+                }
+        
                 if (Player.GetModPlayer<tsorcRevampPlayer>().BurdenOfSmough)
                 {
-                    decelerationRate = 0.6f;
-                    DodgeImmuneTime = 14;
-                    dodgeCooldown = 40;
+                    decelerationRate -= 0.25f;
+                    DodgeImmuneTime -= 4;
+                    dodgeCooldown = dodgeCooldown.Value + 10;
                 }
-
-
+        
+                if (Player.GetModPlayer<tsorcRevampPlayer>().HollowSoldierAgility)
+                {
+                    DodgeImmuneTime += 3;
+                    dodgeCooldown = dodgeCooldown.Value > 20 ? dodgeCooldown.Value - 20 : 0;
+        
+                    if (onGround)
+                    {
+                        decelerationRate += 0.05f;
+                        DodgeImmuneTime += 3;
+                        dodgeCooldown = dodgeCooldown.Value > 2 ? dodgeCooldown.Value - 2 : 0;
+                    }
+                }
+        
+        
                 if (isDodging && Player.GetModPlayer<tsorcRevampPlayer>().MythrilBulwark)
                 {
                     for (int i = 0; i < Main.maxNPCs; i++)
                     {
                         NPC other = Main.npc[i];
-
+        
                         if (!other.friendly & other.Hitbox.Intersects(Utils.CenteredRectangle(Player.Center, new Vector2(200, 200))))
                         {
                             other.AddBuff(ModContent.BuffType<MythrilRamDebuff>(), Items.Accessories.Damage.MythrilBulwark.VulnerabilityDuration * 60);
@@ -557,12 +524,12 @@ namespace tsorcRevamp
                     for (int i = 0; i < Main.maxNPCs; i++)
                     {
                         NPC other = Main.npc[i];
-
+        
                         if (!other.friendly & other.Hitbox.Intersects(Utils.CenteredRectangle(Player.Center, new Vector2(200, 200))))
                         {
                             other.AddBuff(ModContent.BuffType<MythrilRamDebuff>(), Items.Accessories.Damage.MythrilBulwark.VulnerabilityDuration * 60);
                             other.AddBuff(BuffID.Frostburn2, Items.Accessories.Damage.MythrilBulwark.VulnerabilityDuration * 60);
-
+        
                             if (Main.rand.NextBool(3))
                             {
                                 other.AddBuff(BuffID.Confused, Items.Accessories.Damage.MythrilBulwark.VulnerabilityDuration * 60);
@@ -578,12 +545,17 @@ namespace tsorcRevamp
                         }
                     }
                 }
-
-
-                //normal effect
-                Player.velocity.X *= decelerationRate;
+        
+                decelerationRate = Math.Min(1f, decelerationRate); // A deacceleration of 1 means no deacceleration.
+        
+                // Deacceleration Factor: Denotes how many times less deacceleration occurs midair.
+                // Inches the speed multiplier due to deacceleration in midair closer to but never reaching 1 based on the factor given.
+                float deaccelerationFactor = 3f; 
+                float airDeaccelerationRate = decelerationRate + (1 - 1f/deaccelerationFactor) * (1f - decelerationRate);
+        
+                Player.velocity.X *= onGround ? decelerationRate : airDeaccelerationRate;
             }
-
+        
             if (dodgeTime >= DodgeTimeMax)
             {
                 isDodging = false;
@@ -595,7 +567,6 @@ namespace tsorcRevamp
                 Player.runAcceleration = 0f;
             }
         }
-
         public override bool CanBeHitByNPC(NPC npc, ref int cooldownSlot)
         {
             return !isDodging;
